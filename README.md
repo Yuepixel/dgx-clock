@@ -4,7 +4,19 @@
 三眼小表盘显示 GPU / TTFT / MEMORY；也可以切换成数据卡、霓虹表盘等整套外观。
 数据通过 SSH 从 GB10（DGX Spark）等主机采集，**不修改被监控主机**。
 
-![screenshot](docs/assets/preview.png)
+![数据卡 · 霓虹](docs/assets/card-neon.png)
+
+## 表盘一览
+
+点击标题栏胶囊整套切换；下表是内置 5 档（截图均为 mock 数据）。
+
+| 经典三眼 · 原色 | 经典三眼 · 石庭 | 经典三眼 · 雾林 | 经典三眼 · 翡翠 |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/assets/classic-dgx.png" width="220"> | <img src="docs/assets/classic-stone.png" width="220"> | <img src="docs/assets/classic-mist.png" width="220"> | <img src="docs/assets/classic-emerald.png" width="220"> |
+
+| 数据卡 · 霓虹 |
+|:---:|
+| <img src="docs/assets/card-neon.png" width="440"> |
 
 ## 特性
 
