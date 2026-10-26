@@ -1,0 +1,1 @@
+{"name":"dgx-clock-shell","version":"1.0.0","private":true,"main":"main.js","description":"DGX CLOCK transparent Electron shell","dependencies":{"electron":"^45.0.0"}}

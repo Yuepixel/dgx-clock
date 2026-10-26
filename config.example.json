@@ -1,0 +1,37 @@
+{
+  "_comment": "复制为 config.json 后按你的机器修改。config.json 已被 .gitignore 排除，不会进仓库。ssh.key 支持 ~ 和 %USERPROFILE%。",
+  "ssh": {
+    "exe": "ssh",
+    "key": "~/.ssh/id_ed25519"
+  },
+  "hosts": [
+    {
+      "id": "head",
+      "label": "GB10 head node",
+      "host": "user@your-gb10-host",
+      "engine": "tensorfold",
+      "port": 8888,
+      "ctx": 524288
+    }
+  ],
+  "_hosts_note": "id=唯一键；host=SSH 目标(user@ip 或 ~/.ssh/config 别名)；engine=engine_adapters.ADAPTERS 里的家族名（none=不抓引擎）；port=引擎端口（远端 localhost）；ctx=引擎上下文长度（引擎不报时用）。",
+  "clock": {
+    "poll_seconds": 1.5,
+    "decode_max": 120,
+    "ttft_max": 5000,
+    "e2e_max": 30000,
+    "power_max": 200,
+    "decay_seconds": 2.2,
+    "idle_ms": 1200
+  },
+  "window": {
+    "width": 380,
+    "height": 424,
+    "min_width": 300,
+    "min_height": 330,
+    "always_on_top": true
+  },
+  "themes": {
+    "file": "themes.json"
+  }
+}

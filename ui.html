@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="dark">
+<title>DGX CLOCK</title>
+<style>
+  :root{
+    --brand:#76b900; --eng:#b9d97a; --title:#22252a;
+    --txt:#fff; --mut:#8b939d;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  /* 窗体透明：页面自身不着色，只留标题栏 + 表盘两块实体。
+     （Electron transparent 窗口；pywebview 已退役，原因见 PLAN.md） */
+  html,body{height:100%;background:transparent!important;color:var(--txt);overflow:hidden;
+    font-family:'Segoe UI','Microsoft YaHei',-apple-system,sans-serif;
+    user-select:none;-webkit-user-select:none;cursor:default;
+    -webkit-font-smoothing:antialiased}
+  #app{height:100%;display:flex;flex-direction:column;padding:6px 8px 8px;background:transparent;
+    position:relative}
+
+  /* header = 标题栏：保持原来的深灰不透明条，整条可拖动 */
+  header{display:flex;align-items:center;height:26px;flex:0 0 auto;
+    background:var(--title);border:1px solid rgba(0,0,0,.55);border-radius:7px;padding:0 3px;
+    box-shadow:0 6px 18px rgba(0,0,0,.38);-webkit-app-region:drag}
+  #drag{display:flex;align-items:center;gap:8px;flex:1;min-width:0;height:100%;padding-left:2px;overflow:hidden}
+  #drag .dot{width:8px;height:8px;border-radius:50%;background:#5a5a5a;transition:background .3s;flex:0 0 auto;
+    box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+  #drag .theme-btn{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;
+    background:none;border:0;border-radius:6px;padding:3px 6px;margin-left:-6px;
+    font:inherit;color:var(--txt);cursor:pointer;-webkit-app-region:no-drag;
+    text-align:left;transition:background .15s}
+  #drag .theme-btn:hover{background:rgba(255,255,255,.07)}
+  #drag .theme-btn:active{background:rgba(255,255,255,.11)}
+  #drag .title{font-size:13px;font-weight:600;letter-spacing:.4px;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;min-width:0}
+  #drag .theme-pill{font-size:9px;line-height:1;letter-spacing:.5px;color:#c9d2dc;
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.08);
+    padding:2px 5px;border-radius:999px;white-space:nowrap;max-width:58px;overflow:hidden;
+    text-overflow:ellipsis;flex:0 0 auto}
+  #drag .cycle{font-size:11px;line-height:1;color:var(--mut);opacity:.55;flex:0 0 auto}
+  #drag .theme-btn:hover .cycle{opacity:.95;color:#fff}
+  #drag .spacer{flex:1 0 0}
+  #drag .status{font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums;white-space:nowrap;flex:0 0 auto}
+  .btn{width:22px;height:22px;margin-left:4px;border-radius:6px;display:flex;align-items:center;
+    justify-content:center;color:var(--mut);font-size:15px;line-height:1;cursor:pointer;flex:0 0 auto;
+    -webkit-app-region:no-drag}
+  .btn:hover{background:#242424;color:#fff}
+  .btn.close:hover{background:#c0272d;color:#fff}
+  .btn.pin{color:var(--brand)}
+  .btn.pin.off{color:var(--mut)}
+  .btn.pin:hover{background:#242424}
+
+  /* ---------- 表盘区：透明，SVG 随窗口等比缩放 ---------- */
+  .clockbox{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;
+    margin-top:5px;position:relative;background:transparent;border:none}
+  .clockbox svg{display:block;width:100%;height:100%}
+
+  /* 大表盘刻度数字 */
+  .hn{fill:#e3eaf3;font-size:11.5px;font-weight:700;letter-spacing:.2px;
+    font-variant-numeric:tabular-nums;filter:drop-shadow(0 1.2px 1px rgba(0,0,0,.8))}
+
+  /* 小表盘 */
+  .subtick{stroke:#4b525c;stroke-width:.8}
+  .subnum{fill:#8b8b8b;font-size:6.5px;font-variant-numeric:tabular-nums}
+  .sublabel{fill:#a3aebb;font-size:6.6px;letter-spacing:.7px;font-weight:600}
+  .subval{fill:#fff;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;
+    filter:drop-shadow(0 1px 1px rgba(0,0,0,.6))}
+  .subunit{fill:#7d8792;font-size:6.4px;letter-spacing:.4px}
+
+  /* 3 点位：DGX 品牌 + 并发数字窗 + 引擎名 */
+  .dgxmark{fill:var(--brand);font-size:13px;font-weight:800;letter-spacing:3px;
+    filter:drop-shadow(0 0 3px var(--brand))}
+  .datebox{fill:rgba(7,9,13,.92);stroke:rgba(120,132,148,.5);stroke-width:1}
+  .dateinner{fill:none;stroke:rgba(0,0,0,.9);stroke-width:1}
+  .datenum{fill:#fff;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:1px}
+  .datelbl{fill:#8b939d;font-size:6.4px;letter-spacing:.7px;font-weight:600}
+  .engname{fill:var(--eng);font-size:19px;font-family:'French Script MT','Gabriola','Segoe Script',cursive;
+    font-style:normal;font-weight:400;letter-spacing:.4px;opacity:.5;transition:opacity .4s;
+    paint-order:stroke;stroke:rgba(0,0,0,.55);stroke-width:2.2;stroke-linejoin:round}
+  .engname.on{animation:engBreath 2.2s ease-in-out infinite}
+  @keyframes engBreath{0%,100%{opacity:.45}50%{opacity:1}}
+
+  /* ---------- 无边框窗口的 8 向缩放热区 + 右下角可视抓手 ---------- */
+  .rz{position:fixed;z-index:90;-webkit-app-region:no-drag;touch-action:none}
+  .rz.n{top:0;left:10px;right:10px;height:5px;cursor:n-resize}
+  .rz.s{bottom:0;left:10px;right:10px;height:5px;cursor:s-resize}
+  .rz.w{left:0;top:10px;bottom:10px;width:5px;cursor:w-resize}
+  .rz.e{right:0;top:10px;bottom:10px;width:5px;cursor:e-resize}
+  .rz.nw{top:0;left:0;width:10px;height:10px;cursor:nwse-resize}
+  .rz.ne{top:0;right:0;width:10px;height:10px;cursor:nesw-resize}
+  .rz.sw{bottom:0;left:0;width:10px;height:10px;cursor:nesw-resize}
+  .rz.se{right:0;bottom:0;width:12px;height:12px;cursor:nwse-resize}
+  .grip{position:fixed;right:5px;bottom:5px;width:14px;height:14px;z-index:95;
+    -webkit-app-region:no-drag;cursor:nwse-resize;opacity:.42;
+    background:repeating-linear-gradient(-45deg,rgba(255,255,255,.85) 0 1.2px,transparent 1.2px 4.2px);
+    border-radius:2px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.8));
+    transition:opacity .15s}
+  .grip:hover{opacity:.95}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div id="drag">
+      <span class="dot" id="dot"></span>
+      <button class="theme-btn" id="theme-btn" type="button" title="点击轮换配色（themes.json）">
+        <span class="title">DGX CLOCK</span>
+        <span class="theme-pill" id="theme-name">原色</span>
+        <span class="cycle" aria-hidden="true">&#8635;</span>
+      </button>
+      <span class="spacer"></span>
+      <span class="status" id="status">--:--:--</span>
+    </div>
+    <div class="btn pin" id="btn-pin" title="始终置顶">
+      <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="6" r="3.3" fill="currentColor"/>
+        <line x1="8" y1="9.6" x2="8" y2="15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="btn close" id="btn-close" title="关闭">&#215;</div>
+  </header>
+
+  <div class="clockbox" id="clockbox">
+    <svg id="clock" viewBox="0 0 360 360" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+
+  <div class="grip" id="grip" data-dir="se" title="拖动缩放"></div>
+  <div class="rz n"  data-dir="n"></div>
+  <div class="rz s"  data-dir="s"></div>
+  <div class="rz w"  data-dir="w"></div>
+  <div class="rz e"  data-dir="e"></div>
+  <div class="rz nw" data-dir="nw"></div>
+  <div class="rz ne" data-dir="ne"></div>
+  <div class="rz sw" data-dir="sw"></div>
+  <div class="rz se" data-dir="se"></div>
+</div>
+
+<script>
+  /* ═══════════════════════════════════════════════════════════════
+     ▍DGX CLOCK —— 三眼表盘（Electron 透明外壳 / 数据来自 clock_server.py）
+     布局（与 IWC 三眼日历表对应）：
+       · 大表盘刻度   = 实时 decode 速度（0–120 t/s，12 格每格 10）
+       · 3 点位（日历位）= 数字并发窗：前两位当前并发 / 后两位上限（如 02 04）
+       · 6 点位小表盘 = 内存占用 %
+       · 9 点位小表盘 = 实时 TTFT 毫秒（0–5000）
+       · 12 点位小表盘= GPU 利用率 %
+       · 无背景染色、无底部数字行；窗体透明，标题栏保持深灰不透明
+     数据契约：GET /metrics 与 gb10_monitor.py 的 get_metrics() 完全一致。
+     ═══════════════════════════════════════════════════════════════ */
+  let DECODE_MAX = 120;        // 大表盘满格 t/s（config.json → clock.decode_max）
+  let TTFT_MAX = 5000;         // 9 点位满格 ms（config.json → clock.ttft_max）
+  const SZ = 360, CX = 180, CY = 180;
+  const R_OUT = 163;           // 表圈最外缘
+  const R_FACE = 154;          // 盘面半径
+  const R_MAIN = 146;          // 大刻度外缘
+  const R_NUM = 130;           // 大刻度数字半径
+  const R_SUB = 30;            // 小表盘半径
+  const R_SUB_POS = 82;        // 小表盘圆心到大表盘圆心的距离
+  const SUB_ANGLE = { gpu: 0, mem: 180, ttft: 270 };   // GPU 12点 / 内存 6点 / TTFT 9点
+  const DATE_ANGLE = 90;                               // 并发窗 3点
+
+  /* ---- 配色：themes.json 是唯一真源；内置 dgx 只负责首帧/离线回退 ----
+     点击标题栏的 DGX CLOCK（主题胶囊）按 themes.json 的 cycle 顺序轮换。 */
+  const THEME_DEFAULT = {
+    id: 'dgx',
+    name: 'DGX 原色',
+    short: '原色',
+    sub: '品牌绿 · 蓝钢 · 青绿',
+    swatches: ['#232E40', '#76B900', '#5FA8F0', '#1FB894'],
+    face: ['#232E40', '#151C28', '#090C12'],
+    subFace: ['#1A2331', '#111823', '#070A0F'],
+    title: '#22252A',
+    brand: '#76B900',
+    eng: '#B9D97A',
+    gpu: { ring: '#76B900', val: '#8FD11A', num: 'rgba(143,209,26,.60)' },
+    ttft: { ring: '#5FA8F0', val: '#8CC8FF', num: 'rgba(140,200,255,.55)' },
+    mem: { ring: '#1FB894', val: '#45D6B0', num: 'rgba(69,214,176,.55)' },
+    needle: {
+      dark: '#0B2A6B', mid: '#3A7FE0', axis: '#1B4FA8',
+      stroke: '#9CC0FF', glow: '#A0C8FF', tip: '#DBE9FF', edge: '#0A1A3D',
+    },
+  };
+
+  let THEME = THEME_DEFAULT;
+  let CFG = null;
+  let CYCLE = [];
+  let lastData = {};
+  let lastDotOk = true;
+  /* 引擎 idle 判定：run<=0 且工作计数器一段时间不变 → 视为没有新数据 */
+  let lastWorkSig = '';
+  let lastWorkAt = 0;
+  let IDLE_MS = 1200;
+
+  function mergeTheme(base, t){
+    t = t || {};
+    const part = k => ({ ...(base[k] || {}), ...(t[k] || {}) });
+    return {
+      ...base, ...t,
+      id: t.id || base.id,
+      name: t.name || base.name,
+      short: t.short || t.name || base.short || base.name,
+      sub: t.sub || base.sub || '',
+      swatches: Array.isArray(t.swatches) && t.swatches.length ? t.swatches : base.swatches,
+      face: Array.isArray(t.face) && t.face.length === 3 ? t.face : base.face,
+      subFace: Array.isArray(t.subFace) && t.subFace.length === 3 ? t.subFace : base.subFace,
+      title: t.title || base.title,
+      brand: t.brand || base.brand,
+      eng: t.eng || base.eng,
+      gpu: part('gpu'),
+      ttft: part('ttft'),
+      mem: part('mem'),
+      needle: part('needle'),
+    };
+  }
+
+  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+  const num = v => (v == null || v === '' || !isFinite(Number(v))) ? null : Number(v);
+  const fmtInt = n => (n == null) ? '--' : Math.round(n).toLocaleString('en-US');
+
+  // ---- 极坐标（角度：0=12点方向，顺时针）----
+  function pt(cx, cy, r, deg){
+    const a = (deg - 90) * Math.PI / 180;
+    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+  }
+  function arc(cx, cy, r, d0, d1){
+    const p0 = pt(cx, cy, r, d0), p1 = pt(cx, cy, r, d1);
+    const large = (d1 - d0) > 180 ? 1 : 0;
+    return 'M' + p0.x.toFixed(2) + ' ' + p0.y.toFixed(2) + ' A' + r + ' ' + r + ' 0 ' + large + ' 1 ' +
+           p1.x.toFixed(2) + ' ' + p1.y.toFixed(2);
+  }
+  function poly(points){
+    return 'M' + points.map(p => p.x.toFixed(2) + ' ' + p.y.toFixed(2)).join(' L') + ' Z';
+  }
+
+  // ---- 质感底层：太阳纹盘面 / 金属表圈 / 3D 刻度 ----
+  const SUNBURST = (() => {
+    let lines = '';
+    for (let i = 0; i < 720; i++){
+      const deg = i * 0.5;
+      const p1 = pt(CX, CY, 5, deg), p2 = pt(CX, CY, R_FACE - 1, deg);
+      const shimmer = 0.04 + 0.13 * Math.abs(Math.sin((deg + 35) * Math.PI / 180));
+      lines += '<line x1="' + p1.x.toFixed(1) + '" y1="' + p1.y.toFixed(1) +
+               '" x2="' + p2.x.toFixed(1) + '" y2="' + p2.y.toFixed(1) +
+               '" stroke="rgba(125,158,198,' + shimmer.toFixed(3) + ')" stroke-width=".42"/>';
+    }
+    return lines;
+  })();
+
+  function dialDefs(){
+    return '<defs>' +
+      /* 盘面底色：深蓝黑，中心偏上略亮 */
+      '<radialGradient id="dialFace" cx="50%" cy="44%" r="66%">' +
+        '<stop offset="0%" stop-color="' + THEME.face[0] + '"/>' +
+        '<stop offset="48%" stop-color="' + THEME.face[1] + '"/>' +
+        '<stop offset="100%" stop-color="' + THEME.face[2] + '"/>' +
+      '</radialGradient>' +
+      /* 斜向金属光泽 */
+      '<linearGradient id="dialGloss" x1="0" y1="0" x2="1" y2="1">' +
+        '<stop offset="0%" stop-color="rgba(255,255,255,.13)"/>' +
+        '<stop offset="34%" stop-color="rgba(255,255,255,.02)"/>' +
+        '<stop offset="63%" stop-color="rgba(0,0,0,.10)"/>' +
+        '<stop offset="100%" stop-color="rgba(0,0,0,.34)"/>' +
+      '</linearGradient>' +
+      /* 中心柔光 */
+      '<radialGradient id="dialSheen" cx="36%" cy="30%" r="56%">' +
+        '<stop offset="0%" stop-color="rgba(150,185,230,.20)"/>' +
+        '<stop offset="55%" stop-color="rgba(120,150,200,.04)"/>' +
+        '<stop offset="100%" stop-color="rgba(0,0,0,0)"/>' +
+      '</radialGradient>' +
+      /* 边缘压暗 */
+      '<radialGradient id="vignette" cx="50%" cy="50%" r="50%">' +
+        '<stop offset="62%" stop-color="rgba(0,0,0,0)"/>' +
+        '<stop offset="100%" stop-color="rgba(0,0,0,.42)"/>' +
+      '</radialGradient>' +
+      /* 表圈金属：左上亮 → 对角暗 → 右下反光（整环连续，无硬弧线） */
+      '<linearGradient id="bezelMetal" x1="0" y1="0" x2="1" y2="1">' +
+        '<stop offset="0%" stop-color="#c3cdda"/>' +
+        '<stop offset="12%" stop-color="#7a8592"/>' +
+        '<stop offset="38%" stop-color="#3b434d"/>' +
+        '<stop offset="58%" stop-color="#262d35"/>' +
+        '<stop offset="78%" stop-color="#454e59"/>' +
+        '<stop offset="100%" stop-color="#9aa5b2"/>' +
+      '</linearGradient>' +
+      /* 外缘高光：只沿光照方向渐亮，不在左下留白线 */
+      '<linearGradient id="rimLight" x1="0" y1="0" x2="1" y2="1">' +
+        '<stop offset="0%" stop-color="rgba(240,248,255,.72)"/>' +
+        '<stop offset="18%" stop-color="rgba(240,248,255,.18)"/>' +
+        '<stop offset="42%" stop-color="rgba(255,255,255,0)"/>' +
+        '<stop offset="72%" stop-color="rgba(255,255,255,0)"/>' +
+        '<stop offset="100%" stop-color="rgba(170,185,200,.22)"/>' +
+      '</linearGradient>' +
+      /* 刻度块亮面：整盘统一光照（userSpaceOnUse），上亮下暗 */
+      '<linearGradient id="tickFace" gradientUnits="userSpaceOnUse" x1="48" y1="32" x2="316" y2="330">' +
+        '<stop offset="0%" stop-color="#f2f7fd"/>' +
+        '<stop offset="20%" stop-color="#c7d1dc"/>' +
+        '<stop offset="48%" stop-color="#98a3af"/>' +
+        '<stop offset="72%" stop-color="#68727d"/>' +
+        '<stop offset="100%" stop-color="#414a55"/>' +
+      '</linearGradient>' +
+      '<linearGradient id="needleMetal" x1="0" y1="0" x2="1" y2="0">' +
+        '<stop offset="0%" stop-color="#7d8794"/><stop offset="35%" stop-color="#f2f6fb"/>' +
+        '<stop offset="65%" stop-color="#c2ccd8"/><stop offset="100%" stop-color="#5f6875"/>' +
+      '</linearGradient>' +
+      '<linearGradient id="blueSteel" x1="0" y1="0" x2="1" y2="0">' +
+        '<stop offset="0%" stop-color="' + THEME.needle.dark + '"/><stop offset="45%" stop-color="' + THEME.needle.mid + '"/>' +
+        '<stop offset="55%" stop-color="' + THEME.needle.mid + '"/><stop offset="100%" stop-color="' + THEME.needle.dark + '"/>' +
+      '</linearGradient>' +
+      /* 小表盘 */
+      '<radialGradient id="subFace" cx="42%" cy="32%" r="72%">' +
+        '<stop offset="0%" stop-color="' + THEME.subFace[0] + '"/>' +
+        '<stop offset="55%" stop-color="' + THEME.subFace[1] + '"/>' +
+        '<stop offset="100%" stop-color="' + THEME.subFace[2] + '"/>' +
+      '</radialGradient>' +
+      '<radialGradient id="subSheen" cx="36%" cy="28%" r="62%">' +
+        '<stop offset="0%" stop-color="rgba(190,215,245,.11)"/>' +
+        '<stop offset="55%" stop-color="rgba(160,190,230,.02)"/>' +
+        '<stop offset="100%" stop-color="rgba(0,0,0,0)"/>' +
+      '</radialGradient>' +
+      '<radialGradient id="subVignette" cx="50%" cy="50%" r="50%">' +
+        '<stop offset="55%" stop-color="rgba(0,0,0,0)"/>' +
+        '<stop offset="100%" stop-color="rgba(0,0,0,.5)"/>' +
+      '</radialGradient>' +
+      '<linearGradient id="subBezel" x1="0" y1="0" x2="1" y2="1">' +
+        '<stop offset="0%" stop-color="#aab5c2"/><stop offset="25%" stop-color="#5a636f"/>' +
+        '<stop offset="55%" stop-color="#2b323a"/><stop offset="78%" stop-color="#4a535e"/>' +
+        '<stop offset="100%" stop-color="#8d98a5"/>' +
+      '</linearGradient>' +
+      '<linearGradient id="dateBezel" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" stop-color="rgba(150,164,180,.55)"/>' +
+        '<stop offset="100%" stop-color="rgba(70,80,92,.4)"/>' +
+      '</linearGradient>' +
+      /* 滤镜 */
+      '<filter id="caseShadow" x="-20%" y="-20%" width="140%" height="140%">' +
+        '<feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity=".6"/>' +
+      '</filter>' +
+      '<filter id="subShadow" x="-40%" y="-40%" width="180%" height="180%">' +
+        '<feDropShadow dx="0" dy="2.2" stdDeviation="2.2" flood-color="#000" flood-opacity=".7"/>' +
+      '</filter>' +
+      '<filter id="ringGlow" x="-50%" y="-50%" width="200%" height="200%">' +
+        '<feGaussianBlur stdDeviation="1.5" result="b"/>' +
+        '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>' +
+      '</filter>' +
+      '<filter id="tempGlow" x="-40%" y="-40%" width="180%" height="180%">' +
+        '<feGaussianBlur stdDeviation="2.2" result="b"/>' +
+        '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>' +
+      '</filter>' +
+      '<filter id="grain" x="0" y="0" width="100%" height="100%">' +
+        '<feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" result="n"/>' +
+        '<feColorMatrix in="n" type="saturate" values="0" result="g"/>' +
+        '<feComposite in="g" in2="SourceGraphic" operator="in"/>' +
+      '</filter>' +
+      '</defs>';
+  }
+
+  /* 环形路径（外圆 - 内圆，evenodd 挖空） */
+  function ringPath(rOut, rIn){
+    return 'M' + (CX - rOut) + ' ' + CY +
+      ' a' + rOut + ' ' + rOut + ' 0 1 0 ' + (rOut * 2) + ' 0' +
+      ' a' + rOut + ' ' + rOut + ' 0 1 0 ' + (-rOut * 2) + ' 0 Z' +
+      ' M' + (CX - rIn) + ' ' + CY +
+      ' a' + rIn + ' ' + rIn + ' 0 1 0 ' + (rIn * 2) + ' 0' +
+      ' a' + rIn + ' ' + rIn + ' 0 1 0 ' + (-rIn * 2) + ' 0 Z';
+  }
+
+  function tickQuad(deg, rOut, rIn, half){
+    const aL = pt(CX, CY, rOut, deg - half);
+    const aR = pt(CX, CY, rOut, deg + half);
+    const bR = pt(CX, CY, rIn, deg + half);
+    const bL = pt(CX, CY, rIn, deg - half);
+    return [aL, aR, bR, bL];
+  }
+
+  const rgb = (c) => 'rgb(' + Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]) + ')';
+  const mixArr = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+  /* 大表盘静态层：表壳 / 盘面 / 表圈 / 60 格立体刻度 / 数字 */
+  function mainDialStatic(){
+    let s = '';
+    // 表壳投影 + 实体底（防止半透明缝隙露出桌面）
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="' + (R_OUT + 1) + '" fill="#05070a" filter="url(#caseShadow)"/>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="' + R_OUT + '" fill="' + THEME.face[2] + '"/>';
+
+    // 盘面 + 太阳纹 + 颗粒 + 光泽 + 边缘压暗
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="' + R_FACE + '" fill="url(#dialFace)"/>';
+    s += '<g opacity=".55">' + SUNBURST + '</g>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="' + R_FACE + '" fill="#8899aa" opacity=".055" filter="url(#grain)"/>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="' + R_FACE + '" fill="url(#dialSheen)" opacity=".65"/>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="' + R_FACE + '" fill="url(#dialGloss)"/>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="' + R_FACE + '" fill="url(#vignette)"/>';
+
+    // 数字章环：轻微下沉的暗环，让刻度与数字"坐"在盘面里
+    s += '<path d="' + ringPath(R_FACE - .2, 125) + '" fill="rgba(0,0,0,.17)"/>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="125" fill="none" stroke="rgba(0,0,0,.45)" stroke-width=".8"/>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="124.3" fill="none" stroke="rgba(255,255,255,.055)" stroke-width=".6"/>';
+
+    // 表圈：实心金属环（描边层叠，接缝不会露出底色）
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="159.2" fill="none" stroke="url(#bezelMetal)" stroke-width="7.4"/>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="163" fill="none" stroke="rgba(0,0,0,.92)" stroke-width="1"/>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="161.3" fill="none" stroke="url(#rimLight)" stroke-width="1.05"/>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="156.2" fill="none" stroke="rgba(0,0,0,.78)" stroke-width="1.5"/>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="155.1" fill="none" stroke="rgba(210,225,240,.16)" stroke-width=".6"/>';
+
+    // 60 格刻度：每格一条沿径向的金属渐变（底暗尖亮，再按全盘光照加权），
+    // 配侧壁 + 双层投影 + 两端倒角，做出真正的凸起块感。
+    let tickGrads = '';
+    for (let i = 0; i < 60; i++){
+      const deg = i * 6, maj = (i % 5 === 0);
+      const rOut = R_MAIN;
+      const rIn = R_MAIN - (maj ? 16 : 7.6);
+      const half = maj ? 1.55 : .78;
+      const face = tickQuad(deg, rOut, rIn, half);
+      const lit = clamp(Math.cos((deg - 315) * Math.PI / 180), 0, 1);
+
+      const base = mixArr([30, 36, 44], [118, 130, 144], 0.18 + 0.42 * lit);
+      const tip = mixArr([100, 110, 122], [246, 250, 255], 0.10 + 0.85 * lit);
+      const mid = mixArr(base, tip, 0.55);
+      const gi = pt(CX, CY, rIn, deg), go = pt(CX, CY, rOut, deg);
+      tickGrads += '<linearGradient id="tg' + i + '" gradientUnits="userSpaceOnUse" x1="' +
+        gi.x.toFixed(1) + '" y1="' + gi.y.toFixed(1) + '" x2="' + go.x.toFixed(1) + '" y2="' + go.y.toFixed(1) + '">' +
+        '<stop offset="0%" stop-color="' + rgb(base) + '"/>' +
+        '<stop offset="55%" stop-color="' + rgb(mid) + '"/>' +
+        '<stop offset="100%" stop-color="' + rgb(tip) + '"/>' +
+        '</linearGradient>';
+
+      // 柔影 + 硬影（往右下偏，光来自左上）
+      s += '<path d="' + poly(face.map(p => ({ x: p.x + 2.2, y: p.y + 2.4 }))) +
+           '" fill="rgba(0,0,0,.22)"/>';
+      s += '<path d="' + poly(face.map(p => ({ x: p.x + 1.15, y: p.y + 1.25 }))) +
+           '" fill="rgba(0,0,0,.40)"/>';
+      // 侧壁（厚度）
+      s += '<path d="' + poly(face.map(p => ({ x: p.x + .55, y: p.y + .6 }))) +
+           '" fill="#20262d"/>';
+      // 亮面
+      s += '<path d="' + poly(face) + '" fill="url(#tg' + i + ')"/>';
+
+      // 外端倒角（迎光面）
+      const tipBevel = tickQuad(deg, rOut, rOut - 2.1, half * .98);
+      s += '<path d="' + poly(tipBevel) + '" fill="rgba(255,255,255,' + (0.03 + 0.12 * lit).toFixed(3) + ')"/>';
+      // 内端倒角（背光面）
+      const baseBevel = tickQuad(deg, rIn + 1.9, rIn, half * .98);
+      s += '<path d="' + poly(baseBevel) + '" fill="rgba(0,0,0,.32)"/>';
+
+      // 两侧棱线：一侧受光、一侧背光
+      const eHi1 = pt(CX, CY, rIn + 1.2, deg - half * .84);
+      const eHi2 = pt(CX, CY, rOut - 1.2, deg - half * .84);
+      const eLo1 = pt(CX, CY, rIn + 1.2, deg + half * .84);
+      const eLo2 = pt(CX, CY, rOut - 1.2, deg + half * .84);
+      s += '<line x1="' + eHi1.x.toFixed(2) + '" y1="' + eHi1.y.toFixed(2) +
+           '" x2="' + eHi2.x.toFixed(2) + '" y2="' + eHi2.y.toFixed(2) +
+           '" stroke="rgba(255,255,255,' + (0.06 + 0.12 * lit).toFixed(3) + ')" stroke-width=".5"/>';
+      s += '<line x1="' + eLo1.x.toFixed(2) + '" y1="' + eLo1.y.toFixed(2) +
+           '" x2="' + eLo2.x.toFixed(2) + '" y2="' + eLo2.y.toFixed(2) +
+           '" stroke="rgba(0,0,0,.34)" stroke-width=".5"/>';
+
+      // 大刻度的品牌色方块（跟随主题）
+      if (maj){
+        const d = pt(CX, CY, R_MAIN - 21.5, deg);
+        s += '<rect x="' + (d.x - 1.15).toFixed(1) + '" y="' + (d.y - 1.15).toFixed(1) +
+             '" width="2.3" height="2.3" rx=".55" fill="' + THEME.brand + '" opacity=".9"/>';
+      }
+    }
+    s = '<defs>' + tickGrads + '</defs>' + s;
+
+    // 12 个数字：单元素描边+亮面（paint-order），跳过 12 点（小表盘）与 3 点（日期窗）
+    for (let i = 1; i <= 12; i++){
+      if (i === 12 || i === 3) continue;
+      const p = pt(CX, CY, R_NUM, i * 30);
+      s += '<text class="hn" x="' + p.x.toFixed(1) + '" y="' + (p.y + 3.8).toFixed(1) +
+           '" text-anchor="middle" style="paint-order:stroke;stroke:rgba(0,0,0,.85);stroke-width:2.4;stroke-linejoin:round">' +
+           (i * 10) + '</text>';
+    }
+    // 温度外圈：外沿温度色 + 柔光（颜色由 renderClock 更新）
+    s += '<circle id="temp-ring" cx="' + CX + '" cy="' + CY + '" r="' + (R_OUT + 2) +
+         '" fill="none" stroke="rgba(0,0,0,0)" stroke-width="1.8" opacity="0" filter="url(#tempGlow)"' +
+         ' style="transition:stroke .7s ease, opacity .3s ease"/>';
+
+    return s;
+  }
+  function subDial(cx, cy, opt){
+    const { max, value, label, fmt, unit, color } = opt;
+    const rr = R_SUB;
+    const c = color || THEME.ttft;
+    const col = c.ring, colVal = c.val || c.ring, colNum = c.num || c.ring;
+    /* fracValue：指针/进度环用；value：数值文字用。TTFT 没数据时文字显示 --，
+       但指针可以从最后一次位置缓缓回落。 */
+    const fracSource = (opt.fracValue != null) ? opt.fracValue : value;
+    const frac = clamp((num(fracSource) || 0) / max, 0, 1);
+    let s = '';
+
+    // 外圈投影 + 金属表圈（下沉的凹面）
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (rr + 1.6) + '" fill="#05070a" filter="url(#subShadow)"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (rr + 1.4) + '" fill="none" stroke="url(#subBezel)" stroke-width="2.4"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (rr + .4) + '" fill="none" stroke="rgba(0,0,0,.85)" stroke-width="1"/>';
+
+    // 盘面
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + rr + '" fill="url(#subFace)"/>';
+
+    // 底纹：同心蜗纹（细密 + 每 5 圈一道稍亮的圈）
+    let snail = '';
+    for (let r = 3.2, k = 0; r < rr - 1.2; r += .82, k++){
+      const strong = (k % 5 === 0);
+      snail += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r.toFixed(2) + '" fill="none" stroke="rgba(' +
+        (strong ? '205,225,248,.095' : '180,205,235,.042') + ')" stroke-width="' + (strong ? .5 : .38) + '"/>';
+    }
+    s += snail;
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + rr + '" fill="#8899aa" opacity=".05" filter="url(#grain)"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + rr + '" fill="url(#subSheen)"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + rr + '" fill="url(#subVignette)"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (rr - .6) + '" fill="none" stroke="rgba(255,255,255,.06)" stroke-width=".7"/>';
+
+    // 进度环底轨（300°，缺口朝右上）
+    s += '<path d="' + arc(cx, cy, rr - 4.4, 0, 300) + '" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="3.8" stroke-linecap="round"/>';
+    s += '<path d="' + arc(cx, cy, rr - 4.4, 0, 300) + '" fill="none" stroke="rgba(255,255,255,.075)" stroke-width="2.6" stroke-linecap="round"/>';
+    // 进度环（带发光）：始终保留节点，没数据时由衰减动画把弧长收回去
+    const idAttr = name => opt.id ? ' id="' + opt.id + '-' + name + '"' : '';
+    const showRing = frac > 0.004;
+    s += '<path' + idAttr('arc') + ' d="' + arc(cx, cy, rr - 4.4, 0, frac * 300) +
+         '" fill="none" stroke="' + col + '" stroke-width="2.7" stroke-linecap="round"' +
+         ' filter="url(#ringGlow)" opacity="' + (showRing ? 1 : 0) + '"/>';
+    const tip = pt(cx, cy, rr - 4.4, frac * 300);
+    s += '<circle' + idAttr('tip') + ' cx="' + tip.x.toFixed(2) + '" cy="' + tip.y.toFixed(2) +
+         '" r="1.7" fill="' + col + '" filter="url(#ringGlow)" opacity="' + (showRing ? 1 : 0) + '"/>';
+
+    // 12 格小刻度：带投影（跳过正下方 6 点，给单位文字让位）
+    for (let i = 0; i < 12; i++){
+      if (i === 6) continue;
+      const deg = i * 30, maj = (i % 3 === 0);
+      const p1 = pt(cx, cy, rr - 7.6, deg);
+      const p2 = pt(cx, cy, rr - 7.6 - (maj ? 4.2 : 2.4), deg);
+      s += '<line x1="' + (p1.x + .35).toFixed(2) + '" y1="' + (p1.y + .45).toFixed(2) +
+           '" x2="' + (p2.x + .35).toFixed(2) + '" y2="' + (p2.y + .45).toFixed(2) +
+           '" stroke="rgba(0,0,0,.65)" stroke-width="' + (maj ? 1.5 : 1) + '"/>';
+      s += '<line x1="' + p1.x.toFixed(2) + '" y1="' + p1.y.toFixed(2) +
+           '" x2="' + p2.x.toFixed(2) + '" y2="' + p2.y.toFixed(2) +
+           '" stroke="' + (maj ? colNum : 'rgba(150,160,175,.38)') +
+           '" stroke-width="' + (maj ? 1.3 : .75) + '"/>';
+    }
+
+    // 镂空柳叶针（TTFT 有 id 时由衰减动画逐帧重绘这一组）
+    const ang = frac * 300;
+    const needleSvg = subNeedle(cx, cy, ang, rr);
+    s += opt.id ? '<g id="' + opt.id + '-needle">' + needleSvg + '</g>' : needleSvg;
+
+    // 标签 / 数值 / 单位
+    s += '<text class="sublabel" x="' + cx + '" y="' + (cy - 12.5) + '" text-anchor="middle">' + label + '</text>';
+    s += '<text class="subval" x="' + cx + '" y="' + (cy + 12) + '" text-anchor="middle" style="fill:' + colVal + '">' +
+         (fmt ? fmt(value) : fmtInt(value)) + '</text>';
+    s += '<text class="subunit" x="' + cx + '" y="' + (cy + 22.5) + '" text-anchor="middle">' + unit + '</text>';
+    return s;
+  }
+
+  /* 小表盘柳叶针（只有针和轴心，便于逐帧替换） */
+  function subNeedle(cx, cy, ang, rr){
+    const tipP = pt(cx, cy, rr - 10.5, ang);
+    const midP = pt(cx, cy, rr - 16, ang - 3.4);
+    const midQ = pt(cx, cy, rr - 16, ang + 3.4);
+    const tailP = pt(cx, cy, -5, ang);
+    const body = [tipP, midQ, tailP, midP];
+    let s = '';
+    s += '<g transform="translate(.8 .9)" opacity=".55"><path d="' + poly(body) + '" fill="#000"/></g>';
+    s += '<path d="' + poly(body) + '" fill="#e4ebf3" stroke="#8d97a3" stroke-width=".4" stroke-linejoin="round"/>';
+    const h1 = pt(cx, cy, rr - 14.5, ang), h2 = pt(cx, cy, 3.2, ang);
+    s += '<line x1="' + h1.x.toFixed(2) + '" y1="' + h1.y.toFixed(2) + '" x2="' + h2.x.toFixed(2) +
+         '" y2="' + h2.y.toFixed(2) + '" stroke="#0c0f14" stroke-width="1.05"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="2.2" fill="#e4ebf3" stroke="#5c646e" stroke-width=".5"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r=".8" fill="#ffffff"/>';
+    return s;
+  }
+
+  // ---- 3 点位：DGX 标志 + 双格并发窗 ----
+  function dateWindow(run, lanes){
+    const p = pt(CX, CY, R_SUB_POS, DATE_ANGLE);
+    const x = p.x, y = p.y;
+    const cur = String(Math.round(run || 0)).padStart(2, '0');
+    const lim = String(Math.round(lanes || 4)).padStart(2, '0');
+    let s = '';
+
+    s += '<text class="dgxmark" x="' + x + '" y="' + (y - 27) + '" text-anchor="middle">DGX</text>';
+
+    // 日历窗：外框 + 内凹阴影 + 底部反光
+    s += '<rect x="' + (x - 30) + '" y="' + (y - 16) + '" width="60" height="32" rx="5" fill="rgba(6,8,11,.94)" stroke="url(#dateBezel)" stroke-width="1"/>';
+    s += '<rect x="' + (x - 29) + '" y="' + (y - 15) + '" width="58" height="30" rx="4" fill="none" stroke="rgba(0,0,0,.9)" stroke-width="1"/>';
+    s += '<line x1="' + (x - 28.5) + '" y1="' + (y - 14.5) + '" x2="' + (x + 28.5) + '" y2="' + (y - 14.5) + '" stroke="rgba(255,255,255,.07)" stroke-width=".7"/>';
+    s += '<line x1="' + x + '" y1="' + (y - 14) + '" x2="' + x + '" y2="' + (y + 14) + '" stroke="rgba(140,152,168,.45)" stroke-width=".8"/>';
+    s += '<text class="datenum" x="' + (x - 14) + '" y="' + (y + 1) + '" text-anchor="middle">' + cur + '</text>';
+    s += '<text class="datenum" x="' + (x + 14) + '" y="' + (y + 1) + '" text-anchor="middle" style="fill:#9aa3ad">' + lim + '</text>';
+    s += '<text class="datelbl" x="' + x + '" y="' + (y + 12) + '" text-anchor="middle">RUN | MAX</text>';
+
+    return s;
+  }
+
+  /* 引擎名：中轴下方一行，单独一层（不随每秒的 #dial-live 重绘重建，
+     呼吸动画才不会被重置）。引擎工作 → 呼吸亮起；空闲/断连 → 暗底色不闪。 */
+  function updateEngineLabel(name, active){
+    const g = document.getElementById('dial-name');
+    if (!g) return;
+    const txt = String(name || '').trim();
+    if (g.dataset.name !== txt){
+      g.dataset.name = txt;
+      g.innerHTML = txt
+        ? '<text class="engname" id="eng-name" x="' + CX + '" y="225" text-anchor="middle">' + esc(txt) + '</text>'
+        : '';
+      const el = document.getElementById('eng-name');
+      if (el){
+        try{
+          const len = el.getComputedTextLength();
+          const fs = parseFloat(getComputedStyle(el).fontSize) || 18;
+          if (len > 260) el.style.fontSize = (fs * 260 / len).toFixed(2) + 'px';
+        }catch(_){}
+      }
+    }
+    const el = document.getElementById('eng-name');
+    if (el) el.classList.toggle('on', !!active);
+  }
+
+  function esc(t){
+    return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ---- 主指针：蓝钢针，压在小表盘与 3 点日期窗之上（最上层） ----
+  function mainNeedle(value){
+    const frac = clamp((num(value) || 0) / DECODE_MAX, 0, 1);
+    const deg = frac * 360;
+    const tip = pt(CX, CY, R_MAIN - 10, deg);
+    const half = 2.8;
+    const bL = pt(CX, CY, -18, deg - half);
+    const bR = pt(CX, CY, -18, deg + half);
+    const wL = pt(CX, CY, 30, deg - half * 1.15);
+    const wR = pt(CX, CY, 30, deg + half * 1.15);
+    const body = [tip, wR, bR, bL, wL];
+    let s = '';
+    s += '<g transform="translate(1.4 1.5)" opacity=".55"><path d="' + poly(body) + '" fill="#000"/></g>';
+    s += '<path d="' + poly(body) + '" fill="url(#blueSteel)" stroke="' + THEME.needle.edge + '" stroke-width=".5" stroke-linejoin="round"/>';
+    const g1 = pt(CX, CY, R_MAIN - 14, deg - 1.2), g2 = pt(CX, CY, 26, deg - 1.2);
+    s += '<line x1="' + g1.x.toFixed(1) + '" y1="' + g1.y.toFixed(1) + '" x2="' + g2.x.toFixed(1) +
+         '" y2="' + g2.y.toFixed(1) + '" stroke="' + THEME.needle.glow + '" stroke-opacity=".55" stroke-width=".7"/>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="5" fill="' + THEME.needle.axis + '" stroke="' + THEME.needle.stroke + '" stroke-width="1"/>';
+    s += '<circle cx="' + CX + '" cy="' + CY + '" r="1.6" fill="' + THEME.needle.tip + '"/>';
+    return s;
+  }
+
+  /* ---- 无数据回落：decode / TTFT 从最后一次有效值用 2.2s 线性回到 0 ---- */
+  let DECAY_SECONDS = 2.2;
+  const decay = {
+    decode: { shown: 0, active: false, rate: 0 },
+    ttft: { shown: 0, active: false, rate: 0 },
+  };
+  let animRaf = 0, animTs = 0;
+
+  function ensureAnim(){
+    if (!animRaf){ animTs = 0; animRaf = requestAnimationFrame(stepAnim); }
+  }
+
+  function startDecay(key){
+    const st = decay[key];
+    if (st.active || st.shown <= 0) return;
+    st.active = true;
+    st.rate = st.shown / DECAY_SECONDS;
+    ensureAnim();
+  }
+
+  function decayed(key, raw, max){
+    const st = decay[key];
+    if (raw != null){
+      st.shown = (max != null) ? clamp(raw, 0, max) : raw;
+      st.active = false;         // 有新数据立刻接管，不做回弹
+      return raw;
+    }
+    startDecay(key);
+    return st.shown;
+  }
+
+  function stepAnim(ts){
+    animRaf = 0;
+    const dt = animTs ? Math.min(0.05, (ts - animTs) / 1000) : 0.016;
+    animTs = ts;
+    let active = false;
+    for (const key of ['decode', 'ttft']){
+      const st = decay[key];
+      if (!st.active) continue;
+      st.shown = Math.max(0, st.shown - st.rate * dt);
+      if (st.shown <= 0.001){ st.shown = 0; st.active = false; }
+      else active = true;
+    }
+    updateNeedleVisuals();
+    if (active) animRaf = requestAnimationFrame(stepAnim);
+    else animTs = 0;
+  }
+
+  function updateNeedleVisuals(){
+    const nd = document.getElementById('live-needle');
+    if (nd) nd.innerHTML = mainNeedle(decay.decode.shown);
+    updateTtftVisual(decay.ttft.shown);
+  }
+
+  function updateTtftVisual(shown){
+    const p = pt(CX, CY, R_SUB_POS, SUB_ANGLE.ttft);
+    const frac = clamp((num(shown) || 0) / TTFT_MAX, 0, 1);
+    const arcEl = document.getElementById('ttft-arc');
+    if (arcEl){
+      arcEl.setAttribute('d', arc(p.x, p.y, R_SUB - 4.4, 0, frac * 300));
+      arcEl.setAttribute('opacity', frac > 0.004 ? '1' : '0');
+    }
+    const tipEl = document.getElementById('ttft-tip');
+    if (tipEl){
+      const tip = pt(p.x, p.y, R_SUB - 4.4, frac * 300);
+      tipEl.setAttribute('cx', tip.x.toFixed(2));
+      tipEl.setAttribute('cy', tip.y.toFixed(2));
+      tipEl.setAttribute('opacity', frac > 0.004 ? '1' : '0');
+    }
+    const nd = document.getElementById('ttft-needle');
+    if (nd) nd.innerHTML = subNeedle(p.x, p.y, frac * 300, R_SUB);
+  }
+
+  /* ---- 温度外圈：语义色，不参与主题配色 ---- */
+  function mixHex(a, b, f){
+    const A = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16));
+    const B = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+    return 'rgb(' + A.map((v, i) => Math.round(v + (B[i] - v) * f)).join(',') + ')';
+  }
+
+  /* 温度三锚点：
+       warn（默认 55）以下 = 纯主题色；
+       warn → warmAt（62）快速转暖（sqrt 缓入，刚过热区就明显）；
+       warmAt → hot（80）暖色 → 砖红；
+       hot 以上 = 砖红。
+     阈值/颜色都在 themes.json 的 temperature 节点。 */
+  function temperatureLimits(){
+    const cfg = CFG && CFG.temperature;
+    if (!cfg || cfg.enabled === false) return null;
+    let warn = Number(cfg.warn), warmAt = Number(cfg.warmAt), hot = Number(cfg.hot);
+    if (!Number.isFinite(warn)) warn = 55;
+    if (!Number.isFinite(warmAt) || warmAt <= warn) warmAt = warn + 7;
+    if (!Number.isFinite(hot) || hot <= warmAt) hot = warmAt + 18;
+    return { cfg, warn, warmAt, hot };
+  }
+
+  function temperatureColor(t){
+    const lim = temperatureLimits();
+    if (!lim) return null;
+    const v = Number(t);
+    if (!Number.isFinite(v)) return null;
+    const cfg = lim.cfg;
+    const isHex = s => /^#[0-9a-f]{6}$/i.test(String(s || ''));
+
+    if (cfg.mode === 'fixed'){
+      const stops = (Array.isArray(cfg.stops) ? cfg.stops : [])
+        .map(s => ({ t: Number(s && s.t), c: String((s && s.color) || '') }))
+        .filter(s => Number.isFinite(s.t) && isHex(s.c))
+        .sort((a, b) => a.t - b.t);
+      if (!stops.length) return null;
+      if (v <= stops[0].t) return stops[0].c;
+      for (let i = 1; i < stops.length; i++){
+        const a = stops[i - 1], b = stops[i];
+        if (v <= b.t) return mixHex(a.c, b.c, (v - a.t) / (b.t - a.t));
+      }
+      return stops[stops.length - 1].c;
+    }
+
+    const base = isHex(THEME.brand) ? THEME.brand : '#76B900';
+    const warm = isHex(cfg.warmColor) ? cfg.warmColor : '#D98F4E';
+    const hot  = isHex(cfg.hotColor) ? cfg.hotColor : '#C05B4D';
+    if (v <= lim.warn) return base;
+    if (v <= lim.warmAt){
+      const f = Math.sqrt(clamp((v - lim.warn) / (lim.warmAt - lim.warn), 0, 1));
+      return mixHex(base, warm, f);
+    }
+    if (v <= lim.hot){
+      return mixHex(warm, hot, clamp((v - lim.warmAt) / (lim.hot - lim.warmAt), 0, 1));
+    }
+    return hot;
+  }
+
+  /* 0（不热）… 1（hot）：只用于环的粗细/亮度，颜色由 temperatureColor 决定。 */
+  function temperatureHeat(t){
+    const lim = temperatureLimits();
+    if (!lim) return 0;
+    const v = Number(t);
+    if (!Number.isFinite(v)) return 0;
+    return Math.sqrt(clamp((v - lim.warn) / (lim.hot - lim.warn), 0, 1));
+  }
+
+  function updateTempRing(temp){
+    const el = document.getElementById('temp-ring');
+    if (!el) return;
+    const color = temperatureColor(temp);
+    if (!color){
+      el.style.opacity = '0';
+      return;
+    }
+    const cfg = CFG && CFG.temperature;
+    const ring = (cfg && cfg.ring && typeof cfg.ring === 'object') ? cfg.ring : {};
+    const width = Number(ring.width);
+    const opacity = Number(ring.opacity);
+    const w0 = Number.isFinite(width) ? clamp(width, .5, 4) : 1.6;
+    const o0 = Number.isFinite(opacity) ? clamp(opacity, 0, 1) : .75;
+    const heat = temperatureHeat(temp);      // 越热：环略变粗、变亮
+    el.setAttribute('stroke-width', (w0 * (1 + 0.4 * heat)).toFixed(2));
+    el.style.stroke = color;
+    el.style.opacity = String(Math.min(1, o0 + (0.95 - o0) * heat));
+  }
+
+  // ---- 渲染整表：静态层只建一次，动态层每秒更新 ----
+  function ensureStatic(svg){
+    if (svg.dataset.built) return;
+    svg.innerHTML = dialDefs() +
+      '<g id="dial-static">' + mainDialStatic() + '</g>' +
+      '<g id="dial-name"></g>' +
+      '<g id="dial-live"></g>';
+    svg.dataset.built = '1';
+  }
+
+  function renderClock(d){
+    const svg = document.getElementById('clock');
+    if (!svg) return;
+    ensureStatic(svg);
+    d = d || {};
+    lastData = d;
+    const E = d.eng || {};
+    const dataFresh = !d.stale;
+    const run = num(E.run), lanes = num(E.lanes) || 4;
+    const gpu = num(d.gpu), mem = num(d.mem);
+    const decode = dataFresh ? num(E.live) : null;
+    const ttft = dataFresh ? num(E.ttft_ms) : null;
+    /* 没有新数据时，指针从最后一次位置回落；有数据则立即跟随。 */
+    const shownDecode = decayed('decode', decode, DECODE_MAX);
+    const shownTtft = decayed('ttft', ttft, TTFT_MAX);
+
+    let s = '';
+    s += subDial(pt(CX, CY, R_SUB_POS, SUB_ANGLE.gpu).x, pt(CX, CY, R_SUB_POS, SUB_ANGLE.gpu).y,
+                 { max:100, value:gpu, label:'GPU', fmt:v=>fmtInt(v), unit:'%', color:THEME.gpu });
+    s += subDial(pt(CX, CY, R_SUB_POS, SUB_ANGLE.ttft).x, pt(CX, CY, R_SUB_POS, SUB_ANGLE.ttft).y,
+                 { max:TTFT_MAX, value:ttft, fracValue:shownTtft, id:'ttft', label:'TTFT',
+                   fmt:v => (v == null) ? '--' : (v < 1000 ? Math.round(v) : (v/1000).toFixed(2)),
+                   unit:(ttft != null && ttft >= 1000) ? 's' : 'ms',
+                   color:THEME.ttft });
+    s += subDial(pt(CX, CY, R_SUB_POS, SUB_ANGLE.mem).x, pt(CX, CY, R_SUB_POS, SUB_ANGLE.mem).y,
+                 { max:100, value:mem, label:'MEMORY', fmt:v=>fmtInt(v), unit:'%', color:THEME.mem });
+    s += dateWindow(run, lanes);
+    /* 指针必须最后画：3 点日期窗/DGX 标志在它下面，避免指针被遮住 */
+    s += '<g id="live-needle">' + mainNeedle(shownDecode) + '</g>';
+
+    svg.querySelector('#dial-live').innerHTML = s;
+    /* 引擎名单独一层：工作时呼吸，空闲时暗底色（不随每秒重绘重启动画） */
+    updateEngineLabel(d.engName || E.model || '', dataFresh && run > 0);
+    updateTempRing(num(d.temp));
+  }
+
+  // ---- 数据入口：clock_server.py 的 /metrics（与 dashboard 同构） ----
+  function markFreshness(d){
+    const e = d && d.eng;
+    if (!e || !e.ok){
+      d.stale = true;
+      return d;
+    }
+    const run = num(e.run) || 0;
+    const sig = [e.gen, e.prompt, e.done, e.rounds, e.ttft_count, e.lat_count].join('|');
+    const now = Date.now();
+    if (run > 0 || sig !== lastWorkSig){
+      lastWorkSig = sig;
+      lastWorkAt = now;
+    }
+    /* run=0 且 1.2s 内没有任何工作计数变化 → 没有新数据，开始回落 */
+    d.stale = run <= 0 && (now - lastWorkAt) > IDLE_MS;
+    return d;
+  }
+
+  async function refresh(){
+    try{
+      const r = await fetch('/metrics', { cache:'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const m = await r.json();
+      renderClock(markFreshness(pickMetrics(m)));
+      setDot(true);
+    }catch(_){
+      /* 连本地服务都拿不到：点亮断线灯，同时让 decode / TTFT 缓缓回零 */
+      setDot(false);
+      startDecay('decode');
+      startDecay('ttft');
+    }
+  }
+  function setDot(ok){
+    lastDotOk = Boolean(ok);
+    const d = document.getElementById('dot');
+    if (d) d.style.background = ok ? THEME.brand : '#c0272d';
+  }
+
+  /* ---------------- 配色：themes.json → 点击标题轮换 ---------------- */
+  function applyTheme(t){
+    THEME = mergeTheme(THEME_DEFAULT, t || {});
+    const root = document.documentElement.style;
+    root.setProperty('--brand', THEME.brand);
+    root.setProperty('--eng', THEME.eng);
+    root.setProperty('--title', THEME.title);
+
+    const svg = document.getElementById('clock');
+    if (svg) svg.dataset.built = '';       // 盘面/表圈/刻度属于静态层，主题变了要重建
+    renderClock(lastData || {});
+
+    const pill = document.getElementById('theme-name');
+    if (pill) pill.textContent = THEME.short || THEME.name || THEME.id;
+    const btn = document.getElementById('theme-btn');
+    if (btn) btn.title = '点击轮换配色 · 当前：' + (THEME.name || THEME.id);
+    setDot(lastDotOk);
+  }
+
+  function normalizeConfig(raw){
+    const cfg = (raw && typeof raw === 'object') ? raw : {};
+    const src = (cfg.themes && typeof cfg.themes === 'object') ? cfg.themes : {};
+    const themes = {};
+    Object.keys(src).forEach(id => {
+      themes[id] = mergeTheme(THEME_DEFAULT, { ...(src[id] || {}), id });
+    });
+    if (!themes.dgx) themes.dgx = THEME_DEFAULT;
+    const ids = Object.keys(themes);
+    const cycle = Array.isArray(cfg.cycle) ? cfg.cycle.filter(id => themes[id]) : [];
+    return {
+      default: (cfg.default && themes[cfg.default]) ? cfg.default : (themes.dgx ? 'dgx' : ids[0]),
+      cycle: cycle.length ? cycle : ids,
+      themes,
+      temperature: (cfg.temperature && typeof cfg.temperature === 'object') ? cfg.temperature : null,
+    };
+  }
+
+  async function loadThemes(){
+    let raw = null;
+    try{
+      const r = await fetch('/themes', { cache:'no-store' });
+      if (r.ok) raw = await r.json();
+    }catch(_){}
+    if (!raw || !raw.themes){
+      /* 预览/文件模式：没有服务，只保留内置 dgx（温度环也不显示） */
+      CFG = { default:'dgx', cycle:['dgx'], themes:{ dgx: THEME_DEFAULT }, temperature:null };
+      CYCLE = ['dgx'];
+      return false;
+    }
+    CFG = normalizeConfig(raw);
+    CYCLE = CFG.cycle.slice();
+    return true;
+  }
+
+  /* 表盘行为参数来自 config.json 的 clock 节点；服务不可用/字段缺失就用内置默认。 */
+  async function loadClockConfig(){
+    try{
+      const r = await fetch('/config', { cache:'no-store' });
+      if (!r.ok) return;
+      const c = (await r.json()).clock || {};
+      const pos = v => Number.isFinite(Number(v)) && Number(v) > 0;
+      if (pos(c.decode_max)) DECODE_MAX = Number(c.decode_max);
+      if (pos(c.ttft_max)) TTFT_MAX = Number(c.ttft_max);
+      if (pos(c.decay_seconds)) DECAY_SECONDS = Number(c.decay_seconds);
+      if (pos(c.idle_ms)) IDLE_MS = Number(c.idle_ms);
+    }catch(_){}
+  }
+
+  async function initThemes(){
+    await loadThemes();
+    let saved = null;
+    try{ if (window.dgx) saved = (await window.dgx.getState()).theme; }catch(_){}
+    const id = (saved && CFG.themes[saved]) ? saved : CFG.default;
+    applyTheme(CFG.themes[id]);
+  }
+
+  async function cycleTheme(){
+    if (!CFG || CYCLE.length < 2) return;
+    const cur = THEME.id;
+    const i = CYCLE.indexOf(cur);
+    const nextId = CYCLE[(i + 1) % CYCLE.length];
+    const t = CFG.themes[nextId];
+    if (!t) return;
+    applyTheme(t);
+    try{ if (window.dgx) await window.dgx.setTheme(nextId); }catch(_){}
+  }
+
+  function initThemeButton(){
+    const btn = document.getElementById('theme-btn');
+    if (!btn) return;
+    btn.addEventListener('click', ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      cycleTheme();
+    });
+  }
+
+  // 从 get_metrics() 里挑出本表需要的字段
+  function pickMetrics(m){
+    const meta = (m && m.hosts_meta) || [];
+    const hosts = (m && m.hosts) || {};
+    let eng = {}, gpu = null, mem = null, temp = null;
+    meta.forEach(h => {
+      const mm = hosts[h.id] || {}, L = mm.latest || {};
+      if (h.engine !== 'none' && mm.connected && L.eng && L.eng.ok) eng = L.eng;
+      const u = num(L.util); if (u != null) gpu = (gpu == null) ? u : Math.max(gpu, u);
+      const mt = num(L.mem_total), mu = num(L.mem_used);
+      if (mt) { const f = mu / mt * 100; mem = (mem == null) ? f : Math.max(mem, f); }
+      const t = num(L.temp); if (t != null) temp = (temp == null) ? t : Math.max(temp, t);
+    });
+    return { eng, gpu, mem, temp };
+  }
+
+  function tickClock(){
+    const d = new Date();
+    const p2 = n => String(n).padStart(2, '0');
+    const el = document.getElementById('status');
+    if (el) el.textContent = p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
+  }
+
+  // ---- 无边框窗口：8 向拖拽缩放（Electron IPC）----
+  function initResize(){
+    if (!window.dgx) return;
+    document.querySelectorAll('.rz, .grip').forEach(el => {
+      el.addEventListener('pointerdown', ev => {
+        if (ev.button !== 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const dir = el.dataset.dir || 'se';
+        window.dgx.resizeStart(dir);
+        const sx = ev.screenX, sy = ev.screenY;
+        let raf = 0, dx = 0, dy = 0, pending = false, started = false;
+        const flush = () => { pending = false; window.dgx.resizeMove(dx, dy); };
+        const onMove = e => {
+          if (e.buttons === 0) return;              // 鼠标已松开（比如在窗外抬起）
+          dx = e.screenX - sx;
+          dy = e.screenY - sy;
+          if (!started){
+            if (Math.abs(dx) < 3 && Math.abs(dy) < 3) return;   // 3px 起步，避免误缩
+            started = true;
+          }
+          if (!pending){ pending = true; raf = requestAnimationFrame(flush); }
+        };
+        const onUp = () => {
+          document.removeEventListener('pointermove', onMove);
+          document.removeEventListener('pointerup', onUp);
+          document.removeEventListener('pointercancel', onUp);
+          window.removeEventListener('blur', onUp);
+          if (raf) cancelAnimationFrame(raf);
+          window.dgx.resizeEnd();
+        };
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
+        window.addEventListener('blur', onUp);
+        try{ el.setPointerCapture(ev.pointerId); }catch(_){}
+      });
+    });
+  }
+
+  // ---- 标题栏按钮 ----
+  function initShell(){
+    const pin = document.getElementById('btn-pin');
+    const close = document.getElementById('btn-close');
+
+    close.addEventListener('click', () => {
+      if (window.dgx) window.dgx.close();
+      else window.close();
+    });
+
+    (async () => {
+      try{
+        const st = await window.dgx.getState();
+        pin.classList.toggle('off', !st.on_top);
+      }catch(_){}
+    })();
+
+    pin.addEventListener('click', async () => {
+      const next = pin.classList.contains('off');   // 当前 off → 点开后置顶
+      try{
+        const r = await window.dgx.setTop(next);
+        pin.classList.toggle('off', !(r && r.on_top));
+      }catch(_){}
+    });
+
+    initResize();
+  }
+
+  // ---- 启动 ----
+  renderClock({});          // 先画静态盘面，避免开窗白闪
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  if (window.dgx) initShell();
+  initThemeButton();
+  initThemes();
+  loadClockConfig();
+  if (location.protocol === 'http:' || location.protocol === 'https:'){
+    refresh();
+    setInterval(refresh, 1000);
+  }
+
+  // 设计稿/截图脚本直接调用
+  window.renderClock = renderClock;
+  window.pickMetrics = pickMetrics;
+  window.applyTheme = applyTheme;
+</script>
+</body>
+</html>

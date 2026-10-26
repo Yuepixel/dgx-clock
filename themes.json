@@ -1,0 +1,143 @@
+{
+  "version": 2,
+  "_faces_note": "faces = 表盘轮换的唯一真源（模块化界面按数组顺序循环）：每档 = 布局 layout + 配色 theme + 显示名。新增同布局表盘只加一条；新布局还要在 ui/js/main.js 的 LAYOUTS 注册。default/cycle 仅为 ui.html 单文件回退页保留，模块界面不再读取。",
+  "default_face": "classic-dgx",
+  "faces": [
+    { "id": "classic-dgx", "layout": "classic", "theme": "dgx", "name": "经典三眼 · 原色", "short": "原色" },
+    { "id": "classic-stone", "layout": "classic", "theme": "stone", "name": "经典三眼 · 石庭", "short": "石庭" },
+    { "id": "classic-mist", "layout": "classic", "theme": "mist", "name": "经典三眼 · 雾林", "short": "雾林" },
+    { "id": "classic-emerald", "layout": "classic", "theme": "emerald", "name": "经典三眼 · 翡翠", "short": "翡翠" },
+    { "id": "card-dgx", "layout": "card", "theme": "neon", "name": "数据卡 · 霓虹", "short": "数据卡" }
+  ],
+  "default": "dgx",
+  "cycle": ["dgx", "stone", "mist", "emerald"],
+  "temperature": {
+    "enabled": true,
+    "mode": "theme",
+    "warn": 55,
+    "warmAt": 62,
+    "hot": 80,
+    "arcMin": 30,
+    "arcMax": 90,
+    "warmColor": "#D98F4E",
+    "hotColor": "#C05B4D",
+    "stops": [
+      { "t": 35, "color": "#5FA8F0" },
+      { "t": 55, "color": "#76B900" },
+      { "t": 70, "color": "#E6B9A6" },
+      { "t": 85, "color": "#E5322A" }
+    ],
+    "ring": { "width": 1.6, "opacity": 0.75 }
+  },
+  "themes": {
+    "dgx": {
+      "name": "DGX 原色",
+      "short": "原色",
+      "sub": "品牌绿 · 蓝钢 · 青绿",
+      "swatches": ["#232E40", "#76B900", "#5FA8F0", "#1FB894"],
+      "face": ["#232E40", "#151C28", "#090C12"],
+      "subFace": ["#1A2331", "#111823", "#070A0F"],
+      "title": "#22252A",
+      "brand": "#76B900",
+      "eng": "#B9D97A",
+      "gpu": { "ring": "#76B900", "val": "#8FD11A", "num": "rgba(143,209,26,.60)" },
+      "ttft": { "ring": "#5FA8F0", "val": "#8CC8FF", "num": "rgba(140,200,255,.55)" },
+      "mem": { "ring": "#1FB894", "val": "#45D6B0", "num": "rgba(69,214,176,.55)" },
+      "needle": {
+        "dark": "#0B2A6B", "mid": "#3A7FE0", "axis": "#1B4FA8",
+        "stroke": "#9CC0FF", "glow": "#A0C8FF", "tip": "#DBE9FF", "edge": "#0A1A3D"
+      }
+    },
+    "stone": {
+      "name": "石庭晨雾",
+      "short": "石庭",
+      "sub": "暖石 · 陶粉 · 米白",
+      "swatches": ["#2F3645", "#939185", "#E6B9A6", "#EEEDEB"],
+      "face": ["#2F3645", "#1E232D", "#0B0E14"],
+      "subFace": ["#1C222C", "#12171E", "#080A0F"],
+      "title": "#22252A",
+      "brand": "#E6B9A6",
+      "eng": "#D9CBB8",
+      "gpu": { "ring": "#E6B9A6", "val": "#F6D8C9", "num": "rgba(230,185,166,.60)" },
+      "ttft": { "ring": "#EEEDEB", "val": "#FFFFFF", "num": "rgba(238,237,235,.55)" },
+      "mem": { "ring": "#939185", "val": "#B9B7AC", "num": "rgba(147,145,133,.65)" },
+      "needle": {
+        "dark": "#3A2A1C", "mid": "#C9A27E", "axis": "#8A6A4F",
+        "stroke": "#F1D8BE", "glow": "#F6E3CC", "tip": "#FFF4E6", "edge": "#241A12"
+      }
+    },
+    "mist": {
+      "name": "雾林",
+      "short": "雾林",
+      "sub": "冷灰蓝 · 鼠尾草 · 奶油",
+      "swatches": ["#313647", "#435663", "#A3B087", "#FFF8D4"],
+      "face": ["#313647", "#222836", "#0B0E13"],
+      "subFace": ["#1D2432", "#131924", "#080B10"],
+      "title": "#22252A",
+      "brand": "#A3B087",
+      "eng": "#CFE0BE",
+      "gpu": { "ring": "#A3B087", "val": "#C9D7B4", "num": "rgba(163,176,135,.65)" },
+      "ttft": { "ring": "#FFF8D4", "val": "#FFFDF0", "num": "rgba(255,248,212,.55)" },
+      "mem": { "ring": "#7E93A8", "val": "#A8BCCD", "num": "rgba(126,147,168,.65)" },
+      "needle": {
+        "dark": "#123A5A", "mid": "#5B93BE", "axis": "#245C86",
+        "stroke": "#B9D6EC", "glow": "#CFE8F8", "tip": "#EAF6FF", "edge": "#0A2338"
+      }
+    },
+    "emerald": {
+      "name": "深林翡翠",
+      "short": "翡翠",
+      "sub": "蓝灰 · 祖母绿 · 蜜桃 · 奶油",
+      "swatches": ["#2D334A", "#0C9463", "#FAB696", "#FBE3B9"],
+      "face": ["#2D334A", "#1D2233", "#0A0D13"],
+      "subFace": ["#1B2131", "#121724", "#080A0F"],
+      "title": "#22252A",
+      "brand": "#3FCF9A",
+      "eng": "#A7E8CF",
+      "gpu": { "ring": "#0C9463", "val": "#3FCF9A", "num": "rgba(12,148,99,.70)" },
+      "ttft": { "ring": "#FAB696", "val": "#FFD3BF", "num": "rgba(250,182,150,.60)" },
+      "mem": { "ring": "#FBE3B9", "val": "#FFF0D2", "num": "rgba(251,227,185,.60)" },
+      "needle": {
+        "dark": "#06463A", "mid": "#2FB58A", "axis": "#137A5E",
+        "stroke": "#A7F0D8", "glow": "#C8F7E7", "tip": "#EFFFF8", "edge": "#032A23"
+      }
+    },
+    "neon": {
+      "name": "霓虹夜光",
+      "short": "霓虹",
+      "sub": "黑底 · 荧光粉 · 青蓝 · 绿",
+      "swatches": ["#0A0D12", "#FF2E88", "#7FE9FF", "#2BFF88"],
+      "face": ["#10151C", "#080B10", "#000000"],
+      "subFace": ["#0C1016", "#070A0F", "#000000"],
+      "title": "#101114",
+      "brand": "#FF2E88",
+      "eng": "#7FE9FF",
+      "gpu": { "ring": "#2BFF88", "val": "#7CFFB8", "num": "rgba(43,255,136,.60)" },
+      "ttft": { "ring": "#E8FF3E", "val": "#F4FF8C", "num": "rgba(232,255,62,.60)" },
+      "mem": { "ring": "#35D6FF", "val": "#8BE7FF", "num": "rgba(53,214,255,.60)" },
+      "needle": {
+        "dark": "#5A0B2E", "mid": "#FF2E88", "axis": "#B00B4A",
+        "stroke": "#FF9AC6", "glow": "#FFC2D9", "tip": "#FFFFFF", "edge": "#3A0018"
+      },
+      "card": {
+        "bg1": "rgba(244,45,127,.95)",
+        "bg2": "rgba(190,18,88,.95)",
+        "edge": "#FF7DB8",
+        "fg": "#FFFFFF",
+        "mut": "#D8F7FF",
+        "line": "#FFFFFF",
+        "area": "rgba(255,255,255,.20)",
+        "panel": "rgba(0,0,0,.22)",
+        "panelEdge": "rgba(255,255,255,.35)",
+        "power": "#FF8A1E",
+        "ttft": "#E8FF3E",
+        "gpu": "#2BFF88",
+        "mem": "#2BFF88",
+        "e2e": "#FFFFFF",
+        "run": "#FFFFFF",
+        "tick": "rgba(125,235,255,.75)",
+        "tickDim": "rgba(125,235,255,.38)"
+      }
+    }
+  }
+}

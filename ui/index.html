@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="dark">
+<title>DGX CLOCK</title>
+<link rel="stylesheet" href="/ui/app.css">
+<script type="module" src="/ui/js/main.js"></script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div id="drag">
+      <span class="dot" id="dot"></span>
+      <button class="theme-btn" id="face-btn" type="button" title="点击切换表盘（themes.json 的 faces）">
+        <span class="title">DGX CLOCK</span>
+        <span class="theme-pill" id="face-name">原色</span>
+        <span class="cycle" aria-hidden="true">&#8635;</span>
+      </button>
+      <span class="spacer"></span>
+      <span class="status" id="status">--:--:--</span>
+    </div>
+    <div class="btn pin" id="btn-pin" title="始终置顶">
+      <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="6" r="3.3" fill="currentColor"/>
+        <line x1="8" y1="9.6" x2="8" y2="15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="btn close" id="btn-close" title="关闭">&#215;</div>
+  </header>
+
+  <div class="clockbox" id="clockbox">
+    <svg id="clock" viewBox="0 0 360 360" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+
+  <div class="grip" id="grip" data-dir="se" title="拖动缩放"></div>
+  <div class="rz n"  data-dir="n"></div>
+  <div class="rz s"  data-dir="s"></div>
+  <div class="rz w"  data-dir="w"></div>
+  <div class="rz e"  data-dir="e"></div>
+  <div class="rz nw" data-dir="nw"></div>
+  <div class="rz ne" data-dir="ne"></div>
+  <div class="rz sw" data-dir="sw"></div>
+  <div class="rz se" data-dir="se"></div>
+</div>
+
+</body>
+</html>
